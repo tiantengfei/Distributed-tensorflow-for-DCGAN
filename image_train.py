@@ -23,6 +23,7 @@ flags.DEFINE_boolean("is_train", False, "True for training, False for testing [F
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 flags.DEFINE_string("data_dir", "train", "dir for train set")
+flags.DEFINE_string("sample_image_dir", "sample_data", "dir for train set")
 # Flags for defining the tf.train.ClusterSpec
 tf.app.flags.DEFINE_string("ps_hosts", "",
                            "Comma-separated list of hostname:port pairs")
@@ -63,7 +64,7 @@ def train():
                 worker_device="/job:worker/task:%d" % FLAGS.task_index,
                 cluster=cluster)):
             global_step = tf.Variable(0)
-            images, _, _ = image_input.distorted_inputs(data_dir=FLAGS.data_dir)
+            images = image_input.distorted_inputs(data_dir=FLAGS.data_dir)
             images = tf.cast(images, dtype=tf.float32) / 127.5 - 1
             #if not images is None:
             #    print("image is None!!")
@@ -78,7 +79,7 @@ def train():
             # D, D_logits = distriubted_model.discriminator(images)
             D, D_logits = distriubted_model.discriminator(real_images)
             sampler = distriubted_model.sampler(z)
-            sample_images, _, _ = image_input.distorted_inputs(data_dir="sample_data")
+            sample_images = image_input.distorted_inputs(data_dir=FLAGS.sample_image_dir)
             D_, D_logits_ = distriubted_model.discriminator(G, reuse=True)
             tf.histogram_summary("z", z)
             tf.image_summary("G", G)

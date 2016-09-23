@@ -41,9 +41,9 @@ def read_cifar10(filename_queue):
     _, serializded_example = reader.read(filename_queue)
     features = tf.parse_single_example(serializded_example,
                                        features={
-                                           'desc_vector': tf.FixedLenFeature([], tf.string),
+     #                                      'desc_vector': tf.FixedLenFeature([], tf.string),
                                            'image_raw': tf.FixedLenFeature([], tf.string),
-                                           'label': tf.FixedLenFeature([], tf.string)
+    #                                       'label': tf.FixedLenFeature([], tf.string)
                                        })
     image = tf.decode_raw(features['image_raw'], tf.uint8)
 
@@ -52,15 +52,15 @@ def read_cifar10(filename_queue):
 
     result.uint8image = depth_major  # tf.transpose(depth_major, [1, 2, 0])
 
-    desc_vector = tf.decode_raw(features['desc_vector'], tf.float32)
-    result.desc_vector = tf.reshape(desc_vector, [300])
-
-    label = tf.decode_raw(features['label'], tf.float32)
-    result.label = tf.reshape(label, [1])
+    # desc_vector = tf.decode_raw(features['desc_vector'], tf.float32)
+    # result.desc_vector = tf.reshape(desc_vector, [300])
+    #
+    # label = tf.decode_raw(features['label'], tf.float32)
+    # result.label = tf.reshape(label, [1])
     return result
 
 
-def _generate_image_and_label_batch(image, desc_vector, label, min_queue_examples,
+def _generate_image_and_label_batch(image, min_queue_examples,
                                     batch_size, shuffle):
     """ generate a batch of images and labels.
 
@@ -76,15 +76,15 @@ def _generate_image_and_label_batch(image, desc_vector, label, min_queue_example
     """
     num_preprocess_threads = 16
     if shuffle:
-        images, desc_vector, label_batch = tf.train.shuffle_batch(
-            [image, desc_vector, label],
+        images = tf.train.shuffle_batch(
+            [image],
             batch_size=batch_size,
             num_threads=num_preprocess_threads,
             capacity=min_queue_examples + 3 * batch_size,
             min_after_dequeue=min_queue_examples)
     else:
-        images, desc_vector, label_batch = tf.train.batch(
-            [image, desc_vector, label],
+        images = tf.train.batch(
+            [image],
             batch_size=batch_size,
             num_threads=num_preprocess_threads,
             capacity=min_queue_examples + 3 * batch_size)
@@ -92,7 +92,7 @@ def _generate_image_and_label_batch(image, desc_vector, label, min_queue_example
 
     # Display the training images in the visualizer.
     #tf.image_summary('images', images)
-    return images, desc_vector, label_batch
+    return images
 
 
 def distorted_inputs(data_dir, batch_size=64):
@@ -138,7 +138,7 @@ def distorted_inputs(data_dir, batch_size=64):
           'This will take a few minutes.' % min_queue_examples)
 
     # Generate a batch of images and labels by building up a queue of examples.
-    return _generate_image_and_label_batch(float_image, read_input.desc_vector, read_input.label,
+    return _generate_image_and_label_batch(float_image,
                                            min_queue_examples, batch_size,
                                            shuffle=True)
 
