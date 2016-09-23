@@ -40,7 +40,7 @@ FLAGS = flags.FLAGS
 
 z_dim = 100
 sample_size = 64
-image_num = 17000
+image_num = 107773
 batch_size = 64
 step_per_epoch = image_num / batch_size
 
@@ -65,8 +65,8 @@ def train():
             global_step = tf.Variable(0)
             images, _, _ = image_input.distorted_inputs(data_dir=FLAGS.data_dir)
             images = tf.cast(images, dtype=tf.float32) / 127.5 - 1
-            if not images is None:
-                print("image is None!!")
+            #if not images is None:
+            #    print("image is None!!")
             real_images = tf.placeholder(dtype=tf.float32, shape=[batch_size, 50, 50, 3], name='real_image')
             z = tf.placeholder(tf.float32, [None, z_dim], name='z')
             # z = tf.random_uniform([batch_size, z_dim], -1, 1, dtype=tf.float32)
