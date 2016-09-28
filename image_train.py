@@ -34,15 +34,17 @@ tf.app.flags.DEFINE_string("worker_hosts", "",
 tf.app.flags.DEFINE_string("job_name", "", "One of 'ps', 'worker'")
 tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
 tf.app.flags.DEFINE_bool("log_device_placement", True, "whether to log the device placement")
-tf.app.flags.DEFINE_integer('save_summaries_secs', 30,
+tf.app.flags.DEFINE_integer('save_summaries_secs', 10,
                             'Save summaries interval seconds.')
 
 FLAGS = flags.FLAGS
 
 z_dim = 100
 sample_size = 64
-image_num = 107773
+image_num = 107766 * 3
 batch_size = 64
+input_h = 64
+input_w = 64
 step_per_epoch = image_num / batch_size
 
 
@@ -65,10 +67,10 @@ def train():
                 cluster=cluster)):
             global_step = tf.Variable(0)
             images = image_input.distorted_inputs(data_dir=FLAGS.data_dir)
-            images = tf.cast(images, dtype=tf.float32) / 127.5 - 1
-            #if not images is None:
+            # images = tf.cast(images, dtype=tf.float32) / 127.5 - 1
+            # if not images is None:
             #    print("image is None!!")
-            real_images = tf.placeholder(dtype=tf.float32, shape=[batch_size, 50, 50, 3], name='real_image')
+            real_images = tf.placeholder(dtype=tf.float32, shape=[batch_size, input_h, input_w, 3], name='real_image')
             z = tf.placeholder(tf.float32, [None, z_dim], name='z')
             # z = tf.random_uniform([batch_size, z_dim], -1, 1, dtype=tf.float32)
             # sample_z = tf.random_uniform([sample_size, z_dim], -1, 1, dtype=tf.float32)
@@ -109,6 +111,9 @@ def train():
             g_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
                 .minimize(g_loss, var_list=g_vars, global_step=global_step)
 
+            for var in t_vars:
+                tf.histogram_summary(var.op.name, var)
+
             init_op = tf.initialize_all_variables()
             summary_op = tf.merge_all_summaries()
             # sample_z = np.random.uniform(-1, 1, size=(sample_size, z_dim))
@@ -134,10 +139,15 @@ def train():
         is_chief = (FLAGS.task_index == 0)
 
         with sv.managed_session(server.target) as sess:
+            if is_chief:
+                if load(sess, saver):
+                    print ('load success!')
+                else:
+                    print("load failed!!")
             step = 0
             start_time = time.time()
             next_summary_time = start_time + FLAGS.save_summaries_secs
-            while not sv.should_stop() and step < 120000:
+            while not sv.should_stop() and step < 1200000:
                 batch_z = np.random.uniform(-1, 1, [batch_size, z_dim]) \
                     .astype(np.float32)
                 real_img = sess.run(images)
@@ -148,12 +158,15 @@ def train():
                         feed_dict={real_images: real_img, z: batch_z})
 
                     print("Epoch: [%2d] step: [%2d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-                          % (step / step_per_epoch, step,
+                          % (step / step_per_epoch, step % step_per_epoch,
                              (time.time() - start_time), (errD_fake + errD_real), errG))
                 else:
                     errD_fake, errD_real, errG, _, _, summary_str, step = sess.run(
                         [d_loss_fake, d_loss_real, g_loss, d_optim, g_optim, summary_op, global_step],
                         feed_dict={real_images: real_img, z: batch_z})
+                    print("Epoch: [%2d] step: [%2d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+                          % (step / step_per_epoch, step % step_per_epoch,
+                             (time.time() - start_time), (errD_fake + errD_real), errG))
                     if is_chief:
                         tf.logging.info('Running Summary operation on the chief.')
                         print('Running Summary operation on the chief.')
@@ -170,10 +183,11 @@ def train():
                         feed_dict={z: sample_z, real_images: sample_image}
                     )
 
-                    samples = np.array(samples).astype(np.float32)
+                    # samples = np.array(samples).astype(np.float32)
                     # print(samples.shape)
                     save_images(samples, [8, 8],
-                                './samples/train_{:02d}_{:04d}.png'.format(step / step_per_epoch, step))
+                                './samples/train_{:02d}_{:04d}.png'.format(step / step_per_epoch,
+                                                                           step % step_per_epoch))
                     # print('samples images to execute....')
                     print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d1_loss, g1_loss))
 
@@ -191,7 +205,7 @@ def image_save(images, size, path):
 def merge(images, size):
     h, w = images.shape[1], images.shape[2]
     img = np.zeros((h * size[0], w * size[1], 3))
-    images = images[0]
+    # images = images[0]
     for idx, image in enumerate(images):
         print len(image)
         i = idx % size[1]
@@ -214,6 +228,21 @@ def main(_):
         os.makedirs(FLAGS.sample_dir)
 
     train()
+
+
+def load(sess, saver):
+    print(" [*] Reading checkpoints...")
+
+    # model_dir = "%s_%s_%s" % (dataset_name, batch_size, output_size)
+    # checkpoint_dir = os.path.join(checkpoint_dir)
+    # saver = tf.train.Saver()
+    ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
+    if ckpt and ckpt.model_checkpoint_path:
+        # ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+        saver.restore(sess, ckpt.model_checkpoint_path)
+        return True
+    else:
+        return False
 
 
 if __name__ == '__main__':

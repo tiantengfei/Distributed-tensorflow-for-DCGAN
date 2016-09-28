@@ -11,7 +11,7 @@ import tensorflow as tf
 IMAGE_SIZE = 64
 
 NUM_CLASSES = 2
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 4000
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 107766
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1770
 batch_size = 64
 
@@ -45,13 +45,13 @@ def read_cifar10(filename_queue):
                                            'image_raw': tf.FixedLenFeature([], tf.string),
     #                                       'label': tf.FixedLenFeature([], tf.string)
                                        })
-    image = tf.decode_raw(features['image_raw'], tf.uint8)
+    image = tf.decode_raw(features['image_raw'], tf.float64)
 
     depth_major = tf.reshape(image,
                              [result.height, result.width, result.depth])
 
     result.uint8image = depth_major  # tf.transpose(depth_major, [1, 2, 0])
-
+    #print(depth_major.get_shape())
     # desc_vector = tf.decode_raw(features['desc_vector'], tf.float32)
     # result.desc_vector = tf.reshape(desc_vector, [300])
     #
@@ -117,28 +117,28 @@ def distorted_inputs(data_dir, batch_size=64):
     read_input = read_cifar10(filename_queue)
     reshaped_image = tf.cast(read_input.uint8image, tf.float32)
 
-    height = 50
-    width = 50
+    height = 64
+    width = 64
 
-    distorted_image = tf.random_crop(reshaped_image, [height, width, 3])
+    #distorted_image = tf.random_crop(reshaped_image, [height, width, 3])
 
-    distorted_image = tf.image.random_flip_left_right(distorted_image)
+    #distorted_image = tf.image.random_flip_left_right(distorted_image)
 
-    distorted_image = tf.image.random_brightness(distorted_image,
-                                                 max_delta=63)
-    distorted_image = tf.image.random_contrast(distorted_image,
-                                               lower=0.2, upper=1.8)
+    #distorted_image = tf.image.random_brightness(distorted_image,
+    #                                             max_delta=63)
+    #distorted_image = tf.image.random_contrast(distorted_image,
+    #                                           lower=0.2, upper=1.8)
 
-    float_image = tf.image.per_image_whitening(distorted_image)
+    #float_image = tf.image.per_image_whitening(distorted_image)
 
-    min_fraction_of_examples_in_queue = 0.25
+    min_fraction_of_examples_in_queue = 0.1
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
     print('Filling queue with %d CIFAR images before starting to train. '
           'This will take a few minutes.' % min_queue_examples)
 
     # Generate a batch of images and labels by building up a queue of examples.
-    return _generate_image_and_label_batch(float_image,
+    return _generate_image_and_label_batch(reshaped_image,
                                            min_queue_examples, batch_size,
                                            shuffle=True)
 

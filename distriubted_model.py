@@ -88,23 +88,26 @@ def generator(z, y=None):
     z_, h0_w, h0_b = linear(z, gf_dim * 8 * s16 * s16, 'g_h0_lin', with_w=True)
 
     h0 = tf.reshape(z_, [-1, s16, s16, gf_dim * 8])
-    h0 = tf.nn.relu(g_bn0(h0))
-
+    h0 = tf.nn.relu(g_bn0(h0), name="g_h0_relu")
+    _activation_summary(h0)
     h1, h1_w, h1_b = deconv2d(h0, [batch_size, s8, s8, gf_dim * 4], name='g_h1',
                               with_w=True)
-    h1 = tf.nn.relu(g_bn1(h1))
+    h1 = tf.nn.relu(g_bn1(h1),  name="g_h1_relu")
+
+    _activation_summary(h1)
 
     h2, h2_w, h2_b = deconv2d(h1, [batch_size, s4, s4, gf_dim * 2], name='g_h2',
                               with_w=True)
-    h2 = tf.nn.relu(g_bn2(h2))
-
+    h2 = tf.nn.relu(g_bn2(h2),  name="g_h2_relu")
+    _activation_summary(h2)
     h3, h3_w, h3_b = deconv2d(h2, [batch_size, s2, s2, gf_dim * 1], name='g_h3',
                               with_w=True)
-    h3 = tf.nn.relu(g_bn3(h3))
+    h3 = tf.nn.relu(g_bn3(h3),  name="g_h3_relu")
+    _activation_summary(h3)
 
     # h4.shape = [s, s, c_dim]
     h4, h4_w, h4_b = deconv2d(h3, [batch_size, s, s, c_dim], name='g_h4', with_w=True)
-
+    _activation_summary(h4)
     return tf.nn.tanh(h4)
 
 
@@ -112,12 +115,16 @@ def discriminator(image, reuse=False):
     if reuse:
         tf.get_variable_scope().reuse_variables()
 
-    h0 = lrelu(conv2d(image, df_dim, name='d_h0_conv'))
-    h1 = lrelu(d_bn1(conv2d(h0, df_dim * 2, name='d_h1_conv')))
-    h2 = lrelu(d_bn2(conv2d(h1, df_dim * 4, name='d_h2_conv')))
-    h3 = lrelu(d_bn3(conv2d(h2, df_dim * 8, name='d_h3_conv')))
+    h0 = lrelu(conv2d(image, df_dim, name='d_h0_conv'), name="d_h0_conv")
+    h1 = lrelu(d_bn1(conv2d(h0, df_dim * 2, name='d_h1_conv')), name="d_h1_conv")
+    h2 = lrelu(d_bn2(conv2d(h1, df_dim * 4, name='d_h2_conv')), name="d_h2_conv")
+    h3 = lrelu(d_bn3(conv2d(h2, df_dim * 8, name='d_h3_conv')), name="d_h3_conv")
     h4 = linear(tf.reshape(h3, [batch_size, -1]), 1, 'd_h3_lin')
-
+    _activation_summary(h0)
+    _activation_summary(h1)
+    _activation_summary(h2)
+    _activation_summary(h3)
+    _activation_summary(h4)
     return tf.nn.sigmoid(h4), h4
 
 
@@ -153,7 +160,7 @@ def lrelu(x, leak=0.2, name="lrelu"):
 def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
 
-    with tf.variable_scope(scope or "Linear"):
+    with tf.variable_scope(scope or "Linear") as scope:
 
         matrix = _variable_on_cpu("Matrix", [shape[1], output_size], tf.float32,
                                   tf.random_normal_initializer(stddev=stddev))
@@ -169,13 +176,13 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
 def conv2d(input_, output_dim,
            k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
            name="conv2d"):
-    with tf.variable_scope(name):
+    with tf.variable_scope(name) as scope:
         w = _variable_on_cpu('w', [k_h, k_w, input_.get_shape()[-1], output_dim], tf.float32,
                              initializer=tf.truncated_normal_initializer(stddev=stddev))
         biases = _variable_on_cpu('biases', [output_dim], tf.float32, initializer=tf.constant_initializer(0.0))
         conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding='SAME')
 
-        conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape())
+        conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape(), name=scope.name)
 
         return conv
 
@@ -183,9 +190,9 @@ def conv2d(input_, output_dim,
 def deconv2d(input_, output_shape,
              k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
              name="deconv2d", with_w=False):
-    with tf.variable_scope(name):
+    with tf.variable_scope(name)as scope:
         # filter : [height, width, output_channels, in_channels]
-        w = _variable_on_cpu('w', [k_h, k_h, output_shape[-1], input_.get_shape()[-1]], tf.float32,
+        w = _variable_on_cpu('w', [k_h, k_w, output_shape[-1], input_.get_shape()[-1]], tf.float32,
                              initializer=tf.random_normal_initializer(stddev=stddev))
         biases = _variable_on_cpu('biases', [output_shape[-1]], tf.float32, initializer=tf.constant_initializer(0.0))
 
@@ -198,7 +205,7 @@ def deconv2d(input_, output_shape,
             deconv = tf.nn.deconv2d(input_, w, output_shape=output_shape,
                                     strides=[1, d_h, d_w, 1])
 
-        deconv = tf.reshape(tf.nn.bias_add(deconv, biases), deconv.get_shape())
+        deconv = tf.reshape(tf.nn.bias_add(deconv, biases), deconv.get_shape(), name=scope.name)
 
         if with_w:
             return deconv, w, biases
